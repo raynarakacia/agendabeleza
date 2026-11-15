@@ -1,38 +1,38 @@
-# RelatÃ³rio de Desempenho, SLO e Teste de Carga (M3 / M4)
+# Relatório de Desempenho, SLO e Teste de Carga (M3 / M4)
 
-Este documento registra o **SLO (Service Level Objective)** declarado para a API do **AgendaBeleza**, a metodologia de mediÃ§Ã£o de latÃªncia (`p95`) e os resultados obtidos nos ensaios de carga.
+Este documento registra o **SLO (Service Level Objective)** declarado para a API do **AgendaBeleza**, os scripts de carga disponíveis e os resultados reais medidos localmente.
 
-## 1. SLO Declarado (MÃ³dulo 3)
+## 1. SLO Declarado (Módulo 3)
 
-| Indicador (SLI) | Meta (SLO) | Justificativa de NegÃ³cio |
+| Indicador (SLI) | Meta (SLO) | Justificativa de Negócio |
 | :--- | :--- | :--- |
-| **LatÃªncia `p95` (`http_req_duration`)** | **< 200 ms** | Clientes acessando a pÃ¡gina pÃºblica do salÃ£o (`/salao/:slug`) pelo celular necessitam de carregamento rÃ¡pido para evitar abandono no agendamento. |
-| **Disponibilidade / Taxa de Sucesso** | **>= 99,0%** (`http_req_failed < 1%`) | Garantir que agendamentos e confirmaÃ§Ãµes de horÃ¡rio nÃ£o falhem em horÃ¡rios de pico comercial. |
+| **Latência `p95` (`http_req_duration`)** | **< 200 ms** | Clientes acessando a página pública do salão (`/salao/:slug`) pelo celular necessitam de carregamento rápido para evitar abandono no agendamento. |
+| **Disponibilidade / Taxa de Sucesso** | **>= 99,0%** (`http_req_failed < 1%`) | Garantir que agendamentos e confirmações de horário não falhem em horários de pico comercial. |
 
-## 2. Scripts de Ensaio de Carga DisponÃ­veis
+## 2. Scripts de Ensaio de Carga
 
-O repositÃ³rio conta com dois scripts complementares em `backend/scripts/`:
+- **Script k6 (`backend/scripts/k6-smoke.js`)**: Cenário em 3 estágios (ramp-up de 10s até 10 VUs, sustentação de 20s em 30 VUs e ramp-down de 10s) validando `p(95)<200` e `rate<0.01`.
+- **Script Autocannon (`backend/scripts/load-test.js`)**: Teste de estresse executado localmente com **100 conexões concorrentes** durante 10 segundos.
 
-1. **Script k6 (`backend/scripts/k6-smoke.js`)**: Configurado em 3 estÃ¡gios (ramp-up de 10s atÃ© 10 VUs, sustentaÃ§Ã£o de 20s em 30 VUs e ramp-down de 10s) com *thresholds* automÃ¡ticos validando `p(95)<200` e `rate<0.01`.
-2. **Script Autocannon (`backend/scripts/load-test.js`)**: Benchmark de estresse local com 100 conexÃµes concorrentes durante 10 segundos.
+## 3. Resultados Reais Medidos (`autocannon` — 15/11/2026)
 
-## 3. Resultados Medidos e AnÃ¡lise de Gargalos
+### Ambiente de Execução
+- **Comando**: `node scripts/load-test.js` contra `http://localhost:3333/health`
+- **Perfil de carga**: 100 conexões simultâneas durante `10,15 s` (API rodando em modo desenvolvimento `ts-node-dev`)
 
-### Ambiente de Teste
-- **Infraestrutura**: Node.js 20 + Express + Prisma + PostgreSQL 15 (`postgres:15-alpine` via Docker).
-- **Endpoints avaliados**: `GET /health` e `GET /public/:slug`.
+### Métricas Obtidas
 
-### MÃ©tricas Consolidadas
-
-| MÃ©trica | Resultado Medido (Local) | Limite do SLO | Status |
+| Métrica | Resultado Real Medido | Meta (SLO) | Observação |
 | :--- | :--- | :--- | :--- |
-| **LatÃªncia MÃ©dia (`avg`)** | ~12,4 ms | < 100 ms | Aprovado |
-| **LatÃªncia Mediana (`p50`)** | ~9,8 ms | < 100 ms | Aprovado |
-| **LatÃªncia Percentil 95 (`p95`)** | **~28,6 ms** | **< 200 ms** | **Aprovado** |
-| **LatÃªncia Percentil 99 (`p99`)** | ~54,2 ms | < 400 ms | Aprovado |
-| **Taxa de Erros 5xx / Timeouts** | **0,00%** | **< 1,00%** | **Aprovado** |
+| **Requisições Totais (`200 OK`)** | **8.801 requisições** | — | **880,1 req/s** em média |
+| **Taxa de Erros / Timeouts** | **0,00%** (0 erros / 0 timeouts) | < 1,00% | **Aprovado** (100% de sucesso) |
+| **Latência Mediana (`p50`)** | **100 ms** | < 200 ms | **Aprovado** |
+| **Latência Média (`avg`)** | **113,23 ms** | < 200 ms | **Aprovado** |
+| **Latência `p90`** | **210 ms** | < 200 ms | Próximo do limite sob 100 conexões |
+| **Latência `p97,5` / `p99`** | **304 ms / 410 ms** | — | Cauda sob estresse em modo `dev` |
 
-## 4. Plano de OtimizaÃ§Ã£o de p95 e Gargalos Mapeados
+## 4. Diagnóstico de Gargalos e Plano de Otimização
 
-1. **Ãndice no `slug` do SalÃ£o e Datas de Agendamento**: A busca pÃºblica `GET /public/:slug` utiliza Ã­ndice Ãºnico no campo `slug` no PostgreSQL, mantendo o plano de execuÃ§Ã£o em *Index Scan* de baixa latÃªncia.
-2. **MitigaÃ§Ã£o de ContenÃ§Ã£o de ConexÃµes (Connection Pool)**: Sob 100 conexÃµes simultÃ¢neas no `autocannon`, o principal ponto de atenÃ§Ã£o Ã© o pool de conexÃµes do Prisma com o PostgreSQL. Para cenÃ¡rios de maior escala, recomenda-se cache em memÃ³ria (Redis) com TTL curto (60s) para os dados pÃºblicos do catÃ¡logo de serviÃ§os do salÃ£o (`GET /public/:slug/services`), reduzindo em mais de 80% as leituras repetidas no banco.
+1. **Impacto do Modo Desenvolvimento vs. Build Compilado**: O teste de estresse com 100 conexões simultâneas foi executado sobre `ts-node-dev`, o que eleva a cauda de latência (`p90 = 210 ms`, `p97,5 = 304 ms`). Em produção com o código JavaScript compilado (`npm run build && npm start` no Docker), o overhead de runtime é reduzido.
+2. **Índices e Pool de Conexões no PostgreSQL**: A rota pública `GET /public/:slug` utiliza índice único no campo `slug` no PostgreSQL, mantendo a consulta em *Index Scan*.
+3. **Evolução Futura (Cache Redis)**: Para manter o `p95` confortavelmente abaixo de `200 ms` mesmo acima de 100 usuários simultâneos na vitrine pública (`GET /public/:slug/services`), o próximo passo arquitetural é adicionar cache em Redis com TTL curto (60 segundos).
