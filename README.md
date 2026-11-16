@@ -15,7 +15,7 @@ O **AgendaBeleza** é um sistema feito para salões de beleza gerenciarem seus a
 
 ## Como rodar o projeto
 
-### Opção 1: Usando Docker (Recomendado)
+### Opção 1: Usando Docker
 
 Se você tiver o Docker instalado, basta rodar o comando abaixo na pasta raiz do projeto. Ele já inicia o banco de dados e a API automaticamente:
 
